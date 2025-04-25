@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>한국어 지식 그래프 생성기</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/vis-network.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1 class="main-header">지식 그래프(knowledge graph) 분석</h1>
+        <p class="sub-header">텍스트를 입력하면 개체(Entity)와 관계(Relation)를 추출해 그래프로 시각화합니다.</p>
+        <div class="info-banner">입력문은 AI 처리 때문에 1000자 이내를 권장합니다.</div>
+    </header>
+
+    <div class="container">
+        <div class="sidebar">
+            <h2>⚙️ 설정</h2>
+            
+            <div class="settings-group">
+                <label for="api-key">Gemini API 키</label>
+                <input type="password" id="api-key" placeholder="Google AI Studio에서 발급받은 API 키">
+                <small>Google AI Studio에서 발급받은 API 키를 입력하세요.</small>
+            </div>
+            
+            <div class="settings-group">
+                <h3>모델 설정</h3>
+                <label for="model-select">Gemini 모델</label>
+                <select id="model-select">
+                    <option value="models/gemini-2.0-pro-exp-02-05">gemini-2.0-pro-exp-02-05</option>
+                    <option value="models/gemini-1.5-pro">gemini-1.5-pro</option>
+                </select>
+                
+                <label for="temperature">Temperature: <span id="temperature-value">0.2</span></label>
+                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.2">
+                <small>값이 낮을수록 일관된 결과, 높을수록 다양한 결과가 생성됩니다.</small>
+            </div>
+            
+            <div class="settings-group">
+                <h3>개체 유형</h3>
+                <div class="entity-types">
+                    <div class="entity-type-row">
+                        <span class="entity-label person">인물</span>
+                        <span class="entity-label organization">조직</span>
+                        <span class="entity-label location">장소</span>
+                    </div>
+                    <div class="entity-type-row">
+                        <span class="entity-label event">이벤트</span>
+                        <span class="entity-label product">제품</span>
+                        <span class="entity-label other">기타</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer">
+                © 2025 한국어 지식 그래프 생성기<br>
+                <a href="https://github.com/your-username/korean-knowledge-graph-streamlit" target="_blank">GitHub</a>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="tabs">
+                <button class="tab-button active" data-tab="input">📝 텍스트 입력</button>
+                <button class="tab-button" data-tab="data">📊 데이터 보기</button>
+                <button class="tab-button" data-tab="export">📥 내보내기</button>
+            </div>
+            
+            <div class="tab-content">
+                <!-- 텍스트 입력 탭 -->
+                <div class="tab-pane active" id="input-tab">
+                    <div class="input-container">
+                        <div class="text-input-area">
+                            <label for="text-input">분석할 텍스트를 입력하세요</label>
+                            <textarea id="text-input" placeholder="여기에 한국어 텍스트를 입력하세요..."></textarea>
+                        </div>
+                        
+                        <div class="input-controls">
+                            <button id="load-sample" class="secondary-button">샘플 텍스트 불러오기</button>
+                            <button id="clear-input" class="secondary-button">입력 지우기</button>
+                        </div>
+                    </div>
+                    
+                    <button id="analyze-button" class="primary-button">분석하기</button>
+                    
+                    <div id="loading" class="loading hidden">
+                        <div class="spinner"></div>
+                        <p>지식 그래프를 생성하는 중입니다...</p>
+                    </div>
+                    
+                    <div id="result-message" class="result-message hidden"></div>
+                    
+                    <div id="graph-container" class="graph-container hidden">
+                        <h3>지식 그래프 시각화</h3>
+                        <div id="graph-visualization"></div>
+                    </div>
+                </div>
+                
+                <!-- 데이터 보기 탭 -->
+                <div class="tab-pane" id="data-tab">
+                    <div id="data-container" class="data-tables">
+                        <div class="info-message">먼저 텍스트를 분석해주세요.</div>
+                        
+                        <div class="data-tables-content hidden">
+                            <div class="table-container">
+                                <h3>개체 (Entities)</h3>
+                                <div class="table-wrapper">
+                                    <table id="entities-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>이름</th>
+                                                <th>유형</th>
+                                                <th>설명</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
+                                <h3>관계 (Relations)</h3>
+                                <div class="table-wrapper">
+                                    <table id="relations-table">
+                                        <thead>
+                                            <tr>
+                                                <th>소스</th>
+                                                <th>타겟</th>
+                                                <th>관계</th>
+                                                <th>문장</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="table-container">
+                                <h3>관계 정보 (Relations with Info)</h3>
+                                <div class="table-wrapper">
+                                    <table id="relations-info-table">
+                                        <thead>
+                                            <tr>
+                                                <th>소스 ID</th>
+                                                <th>소스 이름</th>
+                                                <th>소스 유형</th>
+                                                <th>타겟 ID</th>
+                                                <th>타겟 이름</th>
+                                                <th>타겟 유형</th>
+                                                <th>관계</th>
+                                                <th>문장</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 내보내기 탭 -->
+                <div class="tab-pane" id="export-tab">
+                    <div id="export-container">
+                        <div class="info-message">먼저 텍스트를 분석해주세요.</div>
+                        
+                        <div class="export-content hidden">
+                            <h3>데이터 내보내기</h3>
+                            <div class="export-buttons">
+                                <button id="export-entities" class="export-button">개체 CSV 다운로드</button>
+                                <button id="export-relations" class="export-button">관계 CSV 다운로드</button>
+                                <button id="export-relations-info" class="export-button">관계정보 CSV 다운로드</button>
+                                <button id="export-jsonl" class="export-button">JSONL 파일 다운로드</button>
+                                <button id="export-html" class="export-button">인터랙티브 그래프(HTML) 다운로드</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
